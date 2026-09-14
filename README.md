@@ -48,9 +48,6 @@ Replace `data/demo_observations.csv` and `data/demo_covariates.csv` with private
 
 Missing particle attributes mean “not reported,” not confirmed absence. For compatibility with the historical calculation, unreported composition fractions contribute zero to the weighted component; explicit reporting flags are returned with the scores.
 
-## E-C-T to E-C-H terminology
-
-Early working files used E-C-T, where `T` denoted the polymer-associated hazard dimension. The manuscript uses E-C-H. This repository uses `H` throughout; the terminology change does not alter the underlying data or numerical definition.
 
 ## Version note
 
