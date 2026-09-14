@@ -1,0 +1,15 @@
+System,Scenario,Mean_MP_Risk
+river,Baseline,30.83215386733673
+river,High Hazard,33.89848045019315
+river,High C,32.73905367213791
+river,High Exposure,32.213692435438375
+river,Worst Case,39.39895120013315
+river,Best Case,22.265356534540302
+river,Increased Interactions,36.362234809929646
+lake,Baseline,40.344085878128375
+lake,High Hazard,42.77987772475907
+lake,High C,43.28162885341321
+lake,High Exposure,42.75801392221788
+lake,Worst Case,51.481556288425736
+lake,Best Case,29.20661546783101
+lake,Increased Interactions,48.719604738859196
