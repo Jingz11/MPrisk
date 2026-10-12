@@ -35,16 +35,25 @@ def _metrics(system: str, architecture: str, y_true: pd.Series, predicted: np.nd
     }
 
 
+def _impute_from_train(x: pd.DataFrame, train: np.ndarray) -> pd.DataFrame:
+    """Learn medians on training rows only; fail if a feature has no support."""
+    medians = x.iloc[train].median()
+    empty = medians.index[medians.isna()].tolist()
+    if empty:
+        raise ValueError(f"Features entirely missing in training data: {empty}")
+    return x.fillna(medians)
+
+
 def fit_direct_rf(model_data: pd.DataFrame, n_trees: int = 300) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Fit the observation-level direct random-forest model."""
     metrics, importances = [], []
     for system, data in model_data.groupby("Class", sort=False):
         data = data.dropna(subset=["MP_Risk"]).copy()
-        data[MODEL_FEATURES] = data[MODEL_FEATURES].fillna(data[MODEL_FEATURES].median())
         x, y = data[MODEL_FEATURES], data["MP_Risk"]
         train, test = train_test_split(
             np.arange(len(data)), test_size=0.2, random_state=42, stratify=_strata(y)
         )
+        x = _impute_from_train(x, train)
         model = RandomForestRegressor(
             n_estimators=n_trees, max_depth=20, max_features=0.7,
             min_samples_split=5, min_samples_leaf=1, random_state=20, n_jobs=-1,
@@ -58,16 +67,26 @@ def fit_direct_rf(model_data: pd.DataFrame, n_trees: int = 300) -> tuple[pd.Data
     return pd.DataFrame(metrics), pd.DataFrame(importances)
 
 
-def fit_cascade_rf(model_data: pd.DataFrame, n_trees: int = 300) -> pd.DataFrame:
-    """Fit E, C and H stages followed by the internal risk reconstruction stage."""
+def fit_cascade_rf(
+    model_data: pd.DataFrame, n_trees: int = 300, *, evaluation: str = "internal"
+) -> pd.DataFrame:
+    """Preserve internal reconstruction; opt in to train-isolated holdout.
+
+    ``holdout`` isolates imputation and every RF fit from outer test rows.
+    Targets must already be defined; this does not fit ECH score normalization.
+    Training meta-features are in-sample predictions, not cross-fitted stacking.
+    """
+    if evaluation not in {"internal", "holdout"}:
+        raise ValueError("evaluation must be 'internal' or 'holdout'")
     metrics = []
     for system, data in model_data.groupby("Class", sort=False):
         data = data.dropna(subset=["E", "C", "H", "MP_Risk"]).copy()
-        data[MODEL_FEATURES] = data[MODEL_FEATURES].fillna(data[MODEL_FEATURES].median())
         x, y = data[MODEL_FEATURES], data["MP_Risk"]
         train, test = train_test_split(
             np.arange(len(data)), test_size=0.2, random_state=42, stratify=_strata(y)
         )
+        x = (_impute_from_train(x, train) if evaluation == "holdout"
+             else x.fillna(x.median()))
         cascade_x = x.copy()
         fitted = []
         for dimension in ["E", "C", "H"]:
@@ -75,7 +94,10 @@ def fit_cascade_rf(model_data: pd.DataFrame, n_trees: int = 300) -> pd.DataFrame
                 n_estimators=max(100, n_trees // 2), max_features=0.7,
                 random_state=42, n_jobs=-1,
             )
-            stage.fit(x, data[dimension])
+            if evaluation == "holdout":
+                stage.fit(x.iloc[train], data[dimension].iloc[train])
+            else:
+                stage.fit(x, data[dimension])
             fitted.append(stage.predict(x))
         cascade_x[["E_fitted", "C_fitted", "H_fitted"]] = np.column_stack(fitted)
         model = RandomForestRegressor(
@@ -84,6 +106,10 @@ def fit_cascade_rf(model_data: pd.DataFrame, n_trees: int = 300) -> pd.DataFrame
         )
         model.fit(cascade_x.iloc[train], y.iloc[train])
         metrics.append(
-            _metrics(system, "Cascade reconstruction RF", y.iloc[test], model.predict(cascade_x.iloc[test]))
+            _metrics(
+                system,
+                "Cascade holdout RF" if evaluation == "holdout" else "Cascade reconstruction RF",
+                y.iloc[test], model.predict(cascade_x.iloc[test]),
+            )
         )
     return pd.DataFrame(metrics)
