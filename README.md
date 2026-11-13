@@ -1,60 +1,26 @@
-# MPrisk
+# ECH
 
-Main method code for the manuscript **“An Exposure–Characteristics–Hazard Framework Reveals Divergent Microplastic Risks in Chinese Freshwaters.”**
+ECH combines external exposure (E), particle characteristics relevant to contact (C), and material-associated hazard (H). Fixed references put the components on comparable scales within each medium. Softmax weights vary with those coordinates. Exposure-anchored fusion produces a screening score from 0 to 100.
 
-## Scope
+## Extension interfaces
 
-The repository publishes the core analytical methods without releasing the study database:
+- **Exposure:** Use `exposure(abundance, reference)` for compatible abundance measures, or supply a validated exposure coordinate for another indicator, medium, or monitoring program.
+- **Characteristics:** `contact_component()` accepts size, shape and colour fractions. For additional contact attributes, including polymer composition, implement the revised component separately and calibrate its reference scale.
+- **Hazard:** `hazard_component()` takes polymer fractions, category log coefficients and a reference mixture. Update these parameters as new hazard evidence becomes available, using the schema in `parameters.json`.
+- **Fusion:** Pass calibrated E, C and H arrays to `fuse()`. Implement and validate alternative fusion rules independently before comparison.
+- **Models:** `modeling.py` separates `design()` from `fit()`. Predictors and learners can change without changing ECH scoring. `dml.py` and `spatial.py` implement adjusted associations and spatial sensitivity.
 
-1. E-C-H score calculation and contribution-scaling scenarios;
-2. direct random-forest prediction;
-3. cascaded E-C-H random-forest reconstruction;
-4. five-fold cross-fitted partially linear DML.
+## Usage
 
-The included CSV files are fully synthetic demonstrations. They contain no manuscript observations, DOI values, coordinates, or original environmental and socioeconomic measurements. Demo results only verify that the software runs; they do not reproduce or represent the paper's numerical findings.
-
-## Run the demonstration
-
-Python 3.11 is recommended.
-
-```bash
+```sh
 python -m pip install -r requirements.txt
-python run_core_analysis.py --quick
+python ech.py states.npz water
+python modeling.py analysis.xlsx --rebuild-oof
+python figures/render.py 1 --output outputs
 ```
 
-To regenerate the deterministic synthetic data first:
-
-```bash
-python generate_demo_data.py
-python run_core_analysis.py --quick
-```
-
-Generated results are written to `outputs/`, which is excluded from version control.
-
-## Code map
-
-- `src/ech.py`: E-C-H components, adaptive weights, interactions, final score, and scenarios.
-- `src/ml.py`: direct random forest and cascaded E-C-H reconstruction model.
-- `src/dml.py`: cross-fitted DML estimates of adjusted associations.
-- `src/common.py`: released predictor lists and shared helpers.
-- `config/ech_parameters.json`: score mappings and interaction coefficients.
-- `generate_demo_data.py`: fixed-seed synthetic demo generator.
-- `run_core_analysis.py`: one-command demonstration of the whole workflow.
-- `tests/test_core.py`: schema, naming, normalization, and scenario checks.
-
-## Apply the code to study data
-
-Replace `data/demo_observations.csv` and `data/demo_covariates.csv` with private files using the same column schema, then update the two input paths in `run_core_analysis.py`. Score normalization is performed separately for rivers and lakes, matching the manuscript workflow.
-
-Missing particle attributes mean “not reported,” not confirmed absence. For compatibility with the historical calculation, unreported composition fractions contribute zero to the weighted component; explicit reporting flags are returned with the scores.
-
-
-## Version note
-
-`config/ech_parameters.json` freezes the parameter values used by the released implementation. A few earlier working or supplementary-table versions contained rounded or revised values, so small differences may occur across historical versions.
-
-The cascade metric is an internal reconstruction check and should not be interpreted as an independent out-of-sample improvement over the direct model. The compact DML module shows one five-fold cross-fitting run; repeated-fold sensitivity analysis can be added by rerunning it across seeds.
+Supply NPZ arrays `A`, `size`, `shape`, `color` and `polymer` in the configured category order. Use Python 3.13 for the prediction benchmark and Python 3.12 for DML and spatial diagnostics: fold assignment or numerical results can differ between dependency versions. Use each command's `--help` for other inputs.
 
 ## Data availability
 
-The study database is not distributed in this public repository. Data-access conditions can be stated in the manuscript's Data Availability section.
+See the article's Supplementary Materials for the observation inventory and published tables. No study data are included. Full reruns require author-supplied conditional states, model design and reference predictions, DML assignments and station linkage, and plot inputs. Figure 2 requires the base plate and ordination tables. Plotting reads the attribution and sensitivity summaries; `modeling.py --attribution-output` can regenerate the model attribution tables.
